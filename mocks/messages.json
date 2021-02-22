@@ -1,0 +1,25 @@
+{
+  "data": [
+    {
+      "id": 1,
+      "fromName": "Agent 1",
+      "subject": "Related to ...",
+      "date": "2021-03-01",
+      "read": false
+    },
+    {
+      "id": 2,
+      "fromName": "Agent 2",
+      "subject": "Can we meet in the office",
+      "date": "2021-03-11",
+      "read": false
+    },
+    {
+      "id": 3,
+      "fromName": "Agent 3",
+      "subject": "Sale in two days",
+      "date": "2021-03-21",
+      "read": false
+    }
+  ]
+}
