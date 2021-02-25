@@ -17,5 +17,11 @@ server.get('/testError', (req, res) => {
   });
 });
 
+router.render = (req, res) => {
+  res.jsonp({
+    data: res.locals.data
+  });
+}
+
 server.use(router);
 server.listen(port);

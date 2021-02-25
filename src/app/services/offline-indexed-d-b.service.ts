@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { OfflineService } from './offline.service';
-import {Observable, of} from 'rxjs';
+import { Observable, of } from 'rxjs';
 
 interface CacheableData {
   id: string;
@@ -51,24 +51,22 @@ export class OfflineIndexedDBService<T> extends OfflineService<T> {
     return tx.objectStore(storeName);
   }
 
-  getItem(ids: string[]): Observable<T[]> {
-    const result: T[] = [];
+  getItem(id: string): Observable<T> {
+    let result: T;
     const store = this.getObjectStore(this.dbStoreName, 'readonly');
-    ids.forEach(id => {
-      const req = store.get(id);
-      req.onsuccess = (evt: any) => {
-        const data = req.result.data;
-        if (data.ttl !== -1 && data.ttl < Date.now()) {
-          this.invalidate(id).subscribe();
-        }
-        else {
-          result.push(data);
-        }
-      };
-      req.onerror = (evt: any) => {
-        console.error('Store doesn\'t have id: ' + id, evt.target.errorCode);
-      };
-    });
+    const req = store.get(id);
+    req.onsuccess = (evt: any) => {
+      const data = req.result.data;
+      if (data.ttl !== -1 && data.ttl < Date.now()) {
+        this.invalidate(id).subscribe();
+      }
+      else {
+        result = data;
+      }
+    };
+    req.onerror = (evt: any) => {
+      console.error('Store doesn\'t have id: ' + id, evt.target.errorCode);
+    };
 
     return of(result);
   }
@@ -100,5 +98,9 @@ export class OfflineIndexedDBService<T> extends OfflineService<T> {
     };
 
     return of<void>();
+  }
+
+  getItems(): Observable<T[]> {
+    return undefined;
   }
 }

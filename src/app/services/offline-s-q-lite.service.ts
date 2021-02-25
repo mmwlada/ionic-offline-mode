@@ -1,7 +1,7 @@
 import {Injectable} from '@angular/core';
 import {SQLite, SQLiteObject} from '@ionic-native/sqlite/ngx';
 
-import {OfflineService} from './offline.service';
+import { Cacheable, OfflineService } from './offline.service';
 import {from, Observable} from 'rxjs';
 import {ConnectionStatus, NetworkService} from './network.service';
 
@@ -18,13 +18,18 @@ import {ConnectionStatus, NetworkService} from './network.service';
 @Injectable({
   providedIn: 'root'
 })
-export class OfflineSQLiteService<T> extends OfflineService<T>{
+export class OfflineSQLiteService<T extends Cacheable> extends OfflineService<T>{
+
+  public ttl = 180;
+  public typePrefix = '';
+
   // SQL Statements
-  private sqlDeleteAll = `DELETE FROM ${this.getTypePrefix()}`;
-  private sqlDeleteId = `DELETE FROM ${this.getTypePrefix()} where id = ?`;
-  private sqlDeleteExpired = `delete from ${this.getTypePrefix()} WHERE ttl <> -1 and ttl < ?`;
-  private sqlGetElements = `select element from ${this.getTypePrefix()} where id in (?)`;
-  private sqlAddElement = `insert into ${this.getTypePrefix()} (id, ttl, element) values (?, ?, ?)`;
+  private sqlDeleteAll = `DELETE FROM ${this.typePrefix}`;
+  private sqlDeleteId = `DELETE FROM ${this.typePrefix} where id = ?`;
+  private sqlDeleteExpired = `delete from ${this.typePrefix} WHERE ttl <> -1 and ttl < ?`;
+  private sqlGetElements = `select element from ${this.typePrefix} where id = (?)`;
+  private sqlGetAllElements = `select element from ${this.typePrefix}`;
+  private sqlAddElement = `insert into ${this.typePrefix} (id, ttl, element) values (?, ?, ?)`;
 
   // Suppress DB invalidations to every x milliseconds
   private invalidationInterval = 5000;
@@ -49,7 +54,7 @@ export class OfflineSQLiteService<T> extends OfflineService<T>{
       this.database = db;
 
       db.executeSql(
-        `create table if not exists ${this.getTypePrefix()}(
+        `create table if not exists ${this.typePrefix}(
                 id char(64) PRIMARY KEY,
                 ttl integer,
                 element blob
@@ -74,61 +79,51 @@ export class OfflineSQLiteService<T> extends OfflineService<T>{
 
   /**
    * Get the elements corresponding to the requested IDs
-   * @param ids
+   * @param id
    */
-  getItem(ids: string[]): Observable<T[]> {
-    return new Observable<T[]>(obs => {
+  getItem(id: string): Observable<T> {
+    return new Observable<T>(obs => {
 
       // Remove expired entries
       this.removeExpired().subscribe(() => {
-        // The set of IDs retrieved from storage
-        const haveIds: string[] = [];
-
         // Now get all of the matching elements from the db
-        this.database.executeSql(this.sqlGetElements, [ids]).then(res => {
+        this.database.executeSql(this.sqlGetElements, [id]).then(res => {
 
-          // Iterate through the result set
-          for (let i = 0, len = res.rows.length; i < length; i++) {
-            const element: T = res.rows.item(i).element;
-            obs.next(element);
-            // Save the IDs we've retrieved so we can retrieve the remaining elements from the API
-            haveIds.push(this.getId(element));
-          }
-
-          // calculate the set of IDs for the missing elements
-          const needIds: string[] = ids.filter(x => !haveIds.includes(x));
-
-          // If there are elements we need AND we're online...
-          if (needIds.length > 0 && this.isOnline) {
-            // Calc the time to live for the new records
-            const now = new Date().getTime();
-            const ttl = this.getTtl() === -1 ? -1 : this.getTtl() + now;
-
-            // Get the missing elements from the API
-            this.getApi(needIds).subscribe((rc) => {
-              const promises: Promise<any>[] = [];
-
-              rc.forEach((element: T) => {
-                // Send the record to the observer
-                obs.next(element);
-
-                // Add the record to the database
-                promises.push(this.database.executeSql(this.sqlAddElement, [this.getId(element), ttl, element]));
-              });
-
-              // Wait for all the database writes to complete
-              Promise.all(promises).finally(() => {
-                obs.complete();
-              });
-
-            });
+          if (res.rows.length === 1) {
+            const element = res.rows.item(0).element;
+            obs.next();
+          } else if (res.rows.length > 1) {
+            // Multiple results for id
           } else {
-            // We had no records or we're offline, signal complete
-            obs.complete();
+            // Nothing in cache
           }
+
+          // Calc the time to live for the new records
+          // const now = new Date().getTime();
+          // const ttl = T.ttl === -1 ? -1 : this.getTtl() + now;
+          obs.complete();
         }).catch(e => {
           console.log('Exception getting elements', e);
+          obs.error(e);
+        });
+      });
+    });
+  }
+
+  getItems(): Observable<T[]> {
+    return new Observable<T[]>(obs => {
+      this.removeExpired().subscribe(() => {
+        this.database.executeSql(this.sqlGetAllElements).then(res => {
+          if (res.rows.length > 0) {
+            for (let i = 0, len = res.rows.length; i < length; i++) {
+              obs.next(res.rows.item(i).element);
+            }
+          }
+
           obs.complete();
+        }).catch(err => {
+          console.log('Failed to get all elements', err);
+          obs.error(err);
         });
       });
     });

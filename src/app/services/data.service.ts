@@ -80,7 +80,14 @@ export class DataService {
       .pipe(catchError(DataService.handleError));
   }
 
-  public getById(path: string, id: number): Observable<Message> {
+  public getById(path: string, id: string): Observable<Message> {
+    return this.http
+      .get(`${this.apiUrl}/${path}/${id}`, httpOptions)
+      .pipe(map((response: any) => response.data))
+      .pipe(catchError(DataService.handleError));
+  }
+
+  public getByIdErr(path: string, id: string): Observable<Message> {
     return this.http
       .get(`${this.apiUrl}/testError`, httpOptions)
       .pipe(map((response: any) => response.data))
